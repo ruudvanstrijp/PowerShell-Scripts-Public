@@ -100,6 +100,7 @@ if ($UsersLineURI -ne $null) {
         $myObject1 | Add-Member -type NoteProperty -name "Calling Policy" -Value $Item.TeamsCallingPolicy
         $myObject1 | Add-Member -type NoteProperty -name "Routing Policy" -Value $Item.OnlineVoiceRoutingPolicy
         $myObject1 | Add-Member -type NoteProperty -name "Dial Plan" -Value $Item.TenantDialPlan
+        $myObject1 | Add-Member -type NoteProperty -name "Caller ID Policy" -Value $Item.CallingLineIdentity
         
         if ($Item.AccountType -eq 'ResourceAccount') {
             $applicationInstance = Get-CsOnlineApplicationInstance $Item.UserPrincipalName
@@ -132,6 +133,8 @@ if ($unassignedNumbers -ne $null) {
         $myObject1 | Add-Member -type NoteProperty -name "LastName" -Value ''
         $myObject1 | Add-Member -type NoteProperty -name "Calling Policy" -Value ''
         $myObject1 | Add-Member -type NoteProperty -name "Routing Policy" -Value ''
+        $myObject1 | Add-Member -type NoteProperty -name "Dial Plan" -Value ''
+        $myObject1 | Add-Member -type NoteProperty -name "Caller ID Policy" -Value ''
         $myObject1 | Add-Member -type NoteProperty -name "Type" -Value 'UnassignedNumberTreatment'
         $myObject1 | Add-Member -type NoteProperty -name "ID" -Value ''
         
