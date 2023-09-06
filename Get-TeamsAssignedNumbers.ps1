@@ -68,7 +68,7 @@ Write-Host (Get-CsTenant).DisplayName -ForegroundColor Green
 #Settings ##############################
 #. "_Settings.ps1" | Out-Null
 $FileName = "TeamsAssignedNumbers_" + (Get-Date -Format s).replace(":", "-") 
-$FilePath = $PSScriptRoot + "\" + $FileName
+$FilePath = $PSScriptRoot + "\Output\" + $FileName
 $OutputType = "HTML" #OPTIONS: CSV - Outputs CSV to specified FilePath, CONSOLE - Outputs to console
 
 

@@ -46,6 +46,8 @@ if($upn -eq $null -or $upn -eq ""){
 
     $choice = Read-Host "Make a choice"
 
+    $choice = [int]$choice
+
     if ($choice -gt 0 -and $choice -le $resourceAccounts.count) {
             $upn = $resourceAccounts[$choice-1].UserPrincipalName
         }
@@ -263,12 +265,6 @@ if(!$type){
             }
         }
 
-        $objectID = (Get-CsOnlineApplicationInstance -Identity $upn).ObjectID
-        Sync-CsOnlineApplicationInstance -ObjectID $objectID
-
-        Write-Host "Resource Account ObjectID: " -ForegroundColor White -NoNewLine
-        Write-Host "$($objectID)" -ForegroundColor Green
-
     }
     else {
         Write-Host '  Skipping type change' -ForegroundColor Yellow
@@ -286,3 +282,9 @@ elseif($type -eq 'Roger365'){
     Set-CsOnlineApplicationInstance -ApplicationId "c8db29b6-8184-44fa-a6a1-086b8ae0435e" -Identity $upn
     Write-host "Setting type to Roger365" -ForegroundColor White
 }
+
+$objectID = (Get-CsOnlineApplicationInstance -Identity $upn).ObjectID
+Sync-CsOnlineApplicationInstance -ObjectID $objectID
+
+Write-Host "Resource Account ObjectID: " -ForegroundColor White -NoNewLine
+Write-Host "$($objectID)" -ForegroundColor Green
