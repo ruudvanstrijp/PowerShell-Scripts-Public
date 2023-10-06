@@ -29,6 +29,8 @@
     v1.4 - Added EV columns; Calling and Voice Routing Policies
     v1.5 - Changed for module 3.0.0
     v1.6 - Get Dial Plan, fix first name, merge Resource Account and User, make table wider
+    v1.7 - Added Unassigned Number Treatment
+    v1.8 - Changed export to Output folder
 
 .NOTES
 Microsoft Teams module 4.0.0 or higher needs to be installed into PowerShell. 5.0 is heavily recommended because of it's speed
@@ -68,7 +70,14 @@ Write-Host (Get-CsTenant).DisplayName -ForegroundColor Green
 #Settings ##############################
 #. "_Settings.ps1" | Out-Null
 $FileName = "TeamsAssignedNumbers_" + (Get-Date -Format s).replace(":", "-") 
-$FilePath = $PSScriptRoot + "\Output\" + $FileName
+$FolderPath = $PSScriptRoot + "\Output\"
+$FilePath = $FolderPath + $FileName
+
+#Check if FilePath Path exists, if not create it
+if (!(Test-Path $FolderPath)) {
+    New-Item -ItemType Directory -Force -Path $FolderPath
+}
+
 $OutputType = "HTML" #OPTIONS: CSV - Outputs CSV to specified FilePath, CONSOLE - Outputs to console
 
 
@@ -79,6 +88,9 @@ $Array1 = @()
 #Get Users with LineURI
 #$UsersLineURI = Get-CsOnlineUser -Filter {LineURI -ne $Null}
 $UsersLineURI = Get-CsOnlineUser -Filter { EnterpriseVoiceEnabled -eq $true }
+$getApplications = Get-CsOnlineApplicationInstance
+Write-Host "  DEBUG: Loaded user list. Processing data." -ForegroundColor DarkGray
+
 if ($UsersLineURI -ne $null) {
     foreach ($item in $UsersLineURI) {                  
         if ($onlyRA -and $Item.AccountType -ne 'ResourceAccount') {
@@ -103,7 +115,8 @@ if ($UsersLineURI -ne $null) {
         $myObject1 | Add-Member -type NoteProperty -name "Caller ID Policy" -Value $Item.CallingLineIdentity
         
         if ($Item.AccountType -eq 'ResourceAccount') {
-            $applicationInstance = Get-CsOnlineApplicationInstance $Item.UserPrincipalName
+            #$applicationInstance = Get-CsOnlineApplicationInstance $Item.UserPrincipalName
+            $applicationInstance = ($getApplications | Where-Object { $_.UserPrincipalName -eq $Item.UserPrincipalName })
             $myObject1 | Add-Member -type NoteProperty -name "Type" -Value $(if ($applicationInstance.ApplicationId -eq "ce933385-9390-45d1-9512-c8d228074e07") { "Auto Attendant Resource Account" } elseif ($applicationInstance.ApplicationId -eq "11cd3e2e-fccb-42ad-ad00-878b93575e07") { "Call Queue Resource Account" } elseif ($applicationInstance.ApplicationId -eq "01b9161a-881b-4ab0-8ee2-15e9141e95c6") { "PeterConnects Resource Account" } elseif ($applicationInstance.ApplicationId -eq "c8db29b6-8184-44fa-a6a1-086b8ae0435e") { "Roger365 Resource Account" } else { "Unknown Resource Account" })
             $myObject1 | Add-Member -type NoteProperty -name "ID" -Value $applicationInstance.ObjectId
         }
@@ -125,18 +138,18 @@ if ($unassignedNumbers -ne $null) {
         $user = (Get-CsOnlineUser $unassignedNumber.Target)
         
         $myObject1 | Add-Member -type NoteProperty -name "LineURI" -Value $phoneNumber
-        $myObject1 | Add-Member -type NoteProperty -name "DDI" -Value ''
+        $myObject1 | Add-Member -type NoteProperty -name "DDI" -Value $unassignedNumber.Identity
         $myObject1 | Add-Member -type NoteProperty -name "Ext" -Value ''
         $myObject1 | Add-Member -type NoteProperty -name "UPN" -Value $user.UserPrincipalName
-        $myObject1 | Add-Member -type NoteProperty -name "DisplayName" -Value $unassignedNumber.Identity
+        $myObject1 | Add-Member -type NoteProperty -name "DisplayName" -Value $unassignedNumber.Description
         $myObject1 | Add-Member -type NoteProperty -name "FirstName" -Value ''
         $myObject1 | Add-Member -type NoteProperty -name "LastName" -Value ''
         $myObject1 | Add-Member -type NoteProperty -name "Calling Policy" -Value ''
         $myObject1 | Add-Member -type NoteProperty -name "Routing Policy" -Value ''
         $myObject1 | Add-Member -type NoteProperty -name "Dial Plan" -Value ''
         $myObject1 | Add-Member -type NoteProperty -name "Caller ID Policy" -Value ''
-        $myObject1 | Add-Member -type NoteProperty -name "Type" -Value 'UnassignedNumberTreatment'
-        $myObject1 | Add-Member -type NoteProperty -name "ID" -Value ''
+        $myObject1 | Add-Member -type NoteProperty -name "Type" -Value "UnassignedNumberTreatment ($($unassignedNumber.TreatmentPriority))"
+        $myObject1 | Add-Member -type NoteProperty -name "ID" -Value $unassignedNumber.Target
         
         $Array1 += $myObject1          
     }
