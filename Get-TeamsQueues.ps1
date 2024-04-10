@@ -44,7 +44,14 @@ Write-Host (Get-CsTenant).DisplayName -ForegroundColor Green
 #Settings ##############################
 #. "_Settings.ps1" | Out-Null
 $FileName = "TeamsQueues_" + (Get-Date -Format s).replace(":", "-") 
-$FilePath = $PSScriptRoot + "\Output\" + $FileName
+$FolderPath = $PSScriptRoot + "\Output\"
+$FilePath = $FolderPath + $FileName
+
+#Check if FilePath Path exists, if not create it
+if (!(Test-Path $FolderPath)) {
+    New-Item -ItemType Directory -Force -Path $FolderPath
+}
+
 $OutputType = "HTML" #OPTIONS: CSV - Outputs CSV to specified FilePath, CONSOLE - Outputs to console
 
 
@@ -134,9 +141,60 @@ if ($VoiceAppCqs -ne $null) {
         #$exceptions += "Timeout: $($VoiceAppCq.TimeoutAction) ($($VoiceAppCq.TimeoutActionTarget.Id))::"
         #$exceptions += "NoAgent: $($VoiceAppCq.NoAgentAction) ($($VoiceAppCq.NoAgentActionTarget.Id))::"
 
-        $exceptions += "Overflow: $($VoiceAppCq.OverflowAction) ($($VoiceAppCq.OverflowThreshold)s)::"
-        $exceptions += "Timeout: $($VoiceAppCq.TimeoutAction) ($($VoiceAppCq.TimeoutThreshold)s)::"
-        $exceptions += "NoAgents: $($VoiceAppCq.NoAgentAction)::"
+        #$exceptions += "Overflow: $($VoiceAppCq.OverflowAction) ($($VoiceAppCq.OverflowThreshold)s)::"
+        #$exceptions += "Timeout: $($VoiceAppCq.TimeoutAction) ($($VoiceAppCq.TimeoutThreshold)s)::"
+        #$exceptions += "NoAgents: $($VoiceAppCq.NoAgentAction)::"
+
+        #$exceptions += "Overflow: $($VoiceAppCq.OverflowAction) ($($VoiceAppCq.OverflowThreshold)s -> $($VoiceAppCq.OverflowActionTarget.Id))::"
+        #$exceptions += "Timeout: $($VoiceAppCq.TimeoutAction) ($($VoiceAppCq.TimeoutThreshold)s) -> $($VoiceAppCq.TimeoutActionTarget.Id))::"
+        #$exceptions += "Timeout: $($VoiceAppCq.NoAgentAction) ($($VoiceAppCq.NoAgentThreshold)s) -> $($VoiceAppCq.NoAgentActionTarget.Id))::"
+        $overflowUPN = $null
+        $overflowUser = $null
+
+        if($VoiceAppCq.OverflowActionTarget.Id -ne $null){
+            if($VoiceAppCq.OverflowActionTarget.Id -like "tel:*"){ 
+                $exceptions += "Overflow: $($VoiceAppCq.OverflowAction) ($($VoiceAppCq.OverflowThreshold) callers -> $($VoiceAppCq.OverflowActionTarget.Id))::" 
+            }else{
+                $overflowUPN = ($allResourceAccounts | Where-Object { $_.ObjectId -eq $VoiceAppCq.OverflowActionTarget.Id }).UserPrincipalName
+                if ($overflowUPN -ne $null){
+                    $overflowUser = $overflowUPN.Split("@")[0]
+                }
+                $exceptions += "Overflow: $($VoiceAppCq.OverflowAction) ($($VoiceAppCq.OverflowThreshold) callers -> $($overflowUser))::"
+            }      
+        }else{
+            $exceptions += "Overflow: $($VoiceAppCq.OverflowAction) ($($VoiceAppCq.OverflowThreshold) callers)::"
+        }
+        
+        if($VoiceAppCq.TimeoutActionTarget.Id -ne $null){
+            if($VoiceAppCq.TimeoutActionTarget.Id -like "tel:*"){ 
+                $exceptions += "Timeout: $($VoiceAppCq.TimeoutAction) ($($VoiceAppCq.TimeoutThreshold)s -> $($VoiceAppCq.TimeoutActionTarget.Id))::" 
+            }else{
+                $overflowUPN = ($allResourceAccounts | Where-Object { $_.ObjectId -eq $VoiceAppCq.TimeoutActionTarget.Id }).UserPrincipalName
+                if ($overflowUPN -ne $null){
+                    $overflowUser = $overflowUPN.Split("@")[0]
+                }
+                $exceptions += "Timeout: $($VoiceAppCq.TimeoutAction) ($($VoiceAppCq.TimeoutThreshold)s -> $($overflowUser))::"
+            } 
+        }
+        else{
+            $exceptions += "Timeout: $($VoiceAppCq.TimeoutAction) ($($VoiceAppCq.TimeoutThreshold)s)::"
+        }
+
+        if($VoiceAppCq.NoAgentActionTarget.Id -ne $null){
+            if($VoiceAppCq.NoAgentActionTarget.Id -like "tel:*"){ 
+                $exceptions += "NoAgents: $($VoiceAppCq.NoAgentAction) ( -> $($VoiceAppCq.NoAgentActionTarget.Id))::"
+            }else{
+                $overflowUPN = ($allResourceAccounts | Where-Object { $_.ObjectId -eq $VoiceAppCq.NoAgentActionTarget.Id }).UserPrincipalName
+                if ($overflowUPN -ne $null){
+                    $overflowUser = $overflowUPN.Split("@")[0]
+                }
+                $exceptions += "NoAgents: $($VoiceAppCq.NoAgentAction) ( -> $($overflowUser))::"
+            } 
+            
+        }
+        else{
+            $exceptions += "NoAgents: $($VoiceAppCq.NoAgentAction)::"
+        }
 
                 
         $VoiceAppCqCallFlow | Add-Member -type NoteProperty -name "Name" -Value $VoiceAppCq.Name
