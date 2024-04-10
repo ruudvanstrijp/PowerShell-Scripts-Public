@@ -39,7 +39,8 @@ Install-Module -Name MicrosoftTeams -Force -Scope AllUsers
 #>
 
 Param (
-    [switch]$onlyRA
+    [switch]$onlyRA,
+    [switch]$onlyMissingPolicies
 )
 
 
@@ -87,13 +88,23 @@ $Regex1 = '^(?:tel:)?(?:\+)?(\d+)(?:;ext=(\d+))?(?:;([\w-]+))?$'
 $Array1 = @()
 #Get Users with LineURI
 #$UsersLineURI = Get-CsOnlineUser -Filter {LineURI -ne $Null}
-$UsersLineURI = Get-CsOnlineUser -Filter { EnterpriseVoiceEnabled -eq $true }
+
+if($onlyMissingPolicies){
+    $UsersLineURI = Get-CsOnlineUser -Filter { EnterpriseVoiceEnabled -eq $true -and (TeamsCallingPolicy -eq $null -or OnlineVoiceRoutingPolicy -eq $null -or TenantDialPlan -eq $null)}
+}else{
+    $UsersLineURI = Get-CsOnlineUser -Filter { EnterpriseVoiceEnabled -eq $true }
+}
+
+#$usersLineURI | Select-Object UserPrincipalName, TeamsCallingPolicy, OnlineVoiceRoutingPolicy, TenantDialPlan
 $getApplications = Get-CsOnlineApplicationInstance
 Write-Host "  DEBUG: Loaded user list. Processing data." -ForegroundColor DarkGray
 
 if ($UsersLineURI -ne $null) {
     foreach ($item in $UsersLineURI) {                  
         if ($onlyRA -and $Item.AccountType -ne 'ResourceAccount') {
+            Continue
+        }
+        if ($onlyMissingPolicies -and $Item.AccountType -eq 'ResourceAccount' -and ($Item.OnlineVoiceRoutingPolicy -ne $null -or $Item.TenantDialPlan -ne $null) ) {
             Continue
         }
         $myObject1 = New-Object System.Object
@@ -130,7 +141,7 @@ if ($UsersLineURI -ne $null) {
 }
 
 $unassignedNumbers = Get-CsTeamsUnassignedNumberTreatment
-if ($unassignedNumbers -ne $null) {
+if ($unassignedNumbers -ne $null -and !$onlyMissingPolicies) {
     foreach ($unassignedNumber in $unassignedNumbers) {                  
         $myObject1 = New-Object System.Object
         
