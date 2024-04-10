@@ -44,7 +44,16 @@ Write-Host (Get-CsTenant).DisplayName -ForegroundColor Green
 #Settings ##############################
 #. "_Settings.ps1" | Out-Null
 $FileName = "TeamsAttendants_" + (Get-Date -Format s).replace(":", "-") 
-$FilePath = $PSScriptRoot + "\Output\" + $FileName
+
+$FolderPath = $PSScriptRoot + "\Output\"
+$FilePath = $FolderPath + $FileName
+
+#Check if FilePath Path exists, if not create it
+if (!(Test-Path $FolderPath)) {
+    New-Item -ItemType Directory -Force -Path $FolderPath
+}
+
+
 $OutputType = "HTML" #OPTIONS: CSV - Outputs CSV to specified FilePath, CONSOLE - Outputs to console
 
 
