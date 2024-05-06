@@ -14,7 +14,9 @@ ruud.vanstrijp@axians.com
 
 #>
 
-$debug = $true
+Param (
+    [switch]$agentStatus
+)
 
 <#
 $teamsModuleVersion = (Get-InstalledModule -Name MicrosoftTeams).Version
@@ -52,9 +54,6 @@ if (!(Test-Path $FolderPath)) {
     New-Item -ItemType Directory -Force -Path $FolderPath
 }
 
-$OutputType = "HTML" #OPTIONS: CSV - Outputs CSV to specified FilePath, CONSOLE - Outputs to console
-
-
 ##############################
 
 $Regex1 = '^(?:tel:)?(?:\+)?(\d+)(?:;ext=(\d+))?(?:;([\w-]+))?$'
@@ -75,6 +74,9 @@ if ($VoiceAppCqs -ne $null) {
         $ApplicationInstanceAssociationCounter = 0
         $ResourceAccountPhoneNumbers = ""
         $ResourceAccountUPNs = ""
+        $teamName = ""
+        $AgentUPNs = ""
+        $exceptions = ""
 
         foreach ($ResourceAccount in $VoiceAppCq.ApplicationInstances) {
             $ResourceAccountPhoneNumber = ($allResourceAccounts | Where-Object { $_.ObjectId -eq $ResourceAccount }).PhoneNumber
@@ -116,7 +118,14 @@ if ($VoiceAppCqs -ne $null) {
         foreach ($Agent in $VoiceAppCq.Agents) {
             $AgentUPN = ($allUsers | Where-Object { $_.Identity -eq $Agent.ObjectId }).UserPrincipalName
             if ($AgentUPN) {
-                $AgentUPNs += "$AgentUPN, "
+                if($Agent.OptIn -eq "True" -and $agentStatus){
+                    $AgentUPNs += "++ $AgentUPN , "
+                }elseif($agentStatus){
+                    $AgentUPNs += "-- $AgentUPN , "
+                }else{
+                    $AgentUPNs += "$AgentUPN, "
+                }
+                
                 $AgentCounter ++
             }
         }
@@ -249,5 +258,5 @@ tr {
 </style>'
 
 $html = $CallFlows | Sort-Object -Property Name |  ConvertTo-Html -Head $Header
-$html.Replace("::","<br/>") | Out-File -FilePath $FilePath".html"
+$html.Replace("::","<br/>").Replace("++","&#10003;").Replace("--","&#9747;") | Out-File -FilePath $FilePath".html"
 Write-Host "ALL DONE!! Your file has been saved to $FilePath.html"
