@@ -34,6 +34,38 @@ catch {
 Write-Host "  Connected to tenant: " -ForegroundColor White -NoNewLine
 Write-Host (Get-CsTenant).DisplayName -ForegroundColor Green
 
+Write-Host
+Write-Host 'Create new Resource Account, Modify existing Resource Account or End script?' -ForegroundColor yellow
+$Create = New-Object System.Management.Automation.Host.ChoiceDescription '&Create', 'Create new resource account.'
+$Modify = New-Object System.Management.Automation.Host.ChoiceDescription '&Modify', 'Modify existing resource account'
+$End = New-Object System.Management.Automation.Host.ChoiceDescription '&End', 'End script; do not create other policies'
+$choices = [System.Management.Automation.Host.ChoiceDescription[]]($Create, $Modify, $End)
+$message = ''
+$RASelect = $Host.UI.PromptForChoice($caption, $message, $choices, -1)
+Write-Host
+If ($RASelect -eq 1) {
+    #continue
+}
+ElseIf ($RASelect -eq 0) {
+    $upn = Read-Host -Prompt 'Enter UPN for the new Resource Account'
+    $DisplayName = Read-Host -Prompt 'Enter Display Name for the new Resource Account'
+    
+    Write-Host
+    Write-Host 'Creating Resource Account of AA Type. Type can be changed after RA creation'
+    New-CsOnlineApplicationInstance -UserPrincipalName $upn -DisplayName $DisplayName -ApplicationId ce933385-9390-45d1-9512-c8d228074e07
+    #Pause script for 1 minute
+    Write-Host 'Pausing script for 1 minute to allow license to be assigned by dynamic group membership'
+    Start-Sleep -s 60
+}
+ElseIf ($RASelect -eq 2) {
+    Write-Host 'Ending script'
+    Break
+}
+Else {
+    Write-Host 'No valid choice was made. Ending script'
+    Break
+}
+
 $resourceAccounts = Get-CsOnlineApplicationInstance
 if ($upn -eq $null -or $upn -eq "") {
     Write-Host "================ Please select the Resource Account ================"
@@ -59,8 +91,10 @@ if ($upn -eq $null -or $upn -eq "") {
     }
 }
 
+Write-Host
 Write-Host "Selected user: " -ForegroundColor White -NoNewLine
 Write-Host "$($upn)" -ForegroundColor Green
+Write-Host
 
 
 #Correct User
@@ -70,12 +104,14 @@ if ($upn -notmatch "\@") {
     exit
 }
 
+$objectID = (Get-CsOnlineApplicationInstance -Identity $upn).ObjectID
+
 if ($phoneNumber -eq $null -or $phoneNumber -eq "") {
     $title = ''
-    $question = 'Do you want to assign a phone number to the user?'
-    $choices = '&Yes', '&No'
+    $question = 'Assign a Phone Number, Remove a Phone Number or Skip Phone Number assignment?'
+    $choices = '&Assign', '&Remove', '&Skip'
 
-    $decision = $Host.UI.PromptForChoice($title, $question, $choices, 1)
+    $decision = $Host.UI.PromptForChoice($title, $question, $choices, 2)
     if ($decision -eq 0) {
         $phoneNumber = Read-Host -Prompt 'Input phone number'
         
@@ -111,6 +147,22 @@ if ($phoneNumber -eq $null -or $phoneNumber -eq "") {
         try {
             #Set-CsUser -Identity $upn -EnterpriseVoiceEnabled $true -HostedVoiceMail $true -LineURI $telLineURI
             Set-CsPhoneNumberAssignment -Identity $upn -PhoneNumber $phoneNumber -PhoneNumberType DirectRouting
+        }
+        Catch {
+            $errOutput = [PSCustomObject]@{
+                status = "failed"
+                error  = $_.Exception.Message
+                step   = "SetCsPhoneNumberAssignment"
+                cmdlet = "Set-CsPhoneNumberAssignment"
+            }
+            Write-Output ( $errOutput | ConvertTo-Json)
+            exit
+        }
+    }if($decision -eq 1) {
+        Write-Host '  Removing phone number assignment' -ForegroundColor Yellow
+
+        try {  
+            Remove-CsPhoneNumberAssignment -Identity $upn -RemoveAll
         }
         Catch {
             $errOutput = [PSCustomObject]@{
@@ -320,22 +372,35 @@ if (!$type) {
         Write-Host "(1) Auto Attendant"
         Write-Host "(2) Call Queue"
         Write-host "(3) Roger365"
+        Write-host "(4) Connecsy"
         Write-host ""
         Write-Host "Press 'q' to quit."
 
         $input1 = Read-Host "Enter your choice"
         switch ($input1) {
             1 { 
-                Set-CsOnlineApplicationInstance -ApplicationId "ce933385-9390-45d1-9512-c8d228074e07" -Identity $upn
                 Write-host "Setting type to Auto Attendant" -ForegroundColor White
+                Set-CsOnlineApplicationInstance -ApplicationId "ce933385-9390-45d1-9512-c8d228074e07" -Identity $upn
+                Write-host "Syncing Application Instance" -ForegroundColor White
+                Sync-CsOnlineApplicationInstance -ApplicationId "ce933385-9390-45d1-9512-c8d228074e07" -ObjectID $objectID
             } 
             2 { 
-                Set-CsOnlineApplicationInstance -ApplicationId "11cd3e2e-fccb-42ad-ad00-878b93575e07" -Identity $upn
                 Write-host "Setting type to Call Queue" -ForegroundColor White
+                Set-CsOnlineApplicationInstance -ApplicationId "11cd3e2e-fccb-42ad-ad00-878b93575e07" -Identity $upn
+                Write-host "Syncing Application Instance" -ForegroundColor White
+                Sync-CsOnlineApplicationInstance -ApplicationId "11cd3e2e-fccb-42ad-ad00-878b93575e07" -ObjectID $objectID
             }
             3 { 
-                Set-CsOnlineApplicationInstance -ApplicationId "c8db29b6-8184-44fa-a6a1-086b8ae0435e" -Identity $upn
                 Write-host "Setting type to Roger365" -ForegroundColor White
+                Set-CsOnlineApplicationInstance -ApplicationId "c8db29b6-8184-44fa-a6a1-086b8ae0435e" -Identity $upn
+                Write-host "Syncing Application Instance" -ForegroundColor White
+                Sync-CsOnlineApplicationInstance -ApplicationId "c8db29b6-8184-44fa-a6a1-086b8ae0435e" -ObjectID $objectID
+            }
+            4 { 
+                Write-host "Setting type to Connecsy" -ForegroundColor White
+                Set-CsOnlineApplicationInstance -ApplicationId "0346b13d-1bb8-4e22-9890-af279449eba9" -Identity $upn
+                Write-host "Syncing Application Instance" -ForegroundColor White
+                Sync-CsOnlineApplicationInstance -ApplicationId "0346b13d-1bb8-4e22-9890-af279449eba9" -ObjectID $objectID
             }
             q {
                 Write-Host "Pressed quit" -ForegroundColor Red
@@ -353,20 +418,32 @@ if (!$type) {
     }
 }
 elseif ($type -eq 'AA') {
-    Set-CsOnlineApplicationInstance -ApplicationId "ce933385-9390-45d1-9512-c8d228074e07" -Identity $upn
     Write-host "Setting type to Auto Attendant" -ForegroundColor White
+    Set-CsOnlineApplicationInstance -ApplicationId "ce933385-9390-45d1-9512-c8d228074e07" -Identity $upn
+    Write-host "Syncing Application Instance" -ForegroundColor White
+    Sync-CsOnlineApplicationInstance -ApplicationId "ce933385-9390-45d1-9512-c8d228074e07" -ObjectID $objectID
+    
 }
 elseif ($type -eq 'CQ') {
-    Set-CsOnlineApplicationInstance -ApplicationId "11cd3e2e-fccb-42ad-ad00-878b93575e07" -Identity $upn
     Write-host "Setting type to Call Queue" -ForegroundColor White
+    Set-CsOnlineApplicationInstance -ApplicationId "11cd3e2e-fccb-42ad-ad00-878b93575e07" -Identity $upn
+    Write-host "Syncing Application Instance" -ForegroundColor White
+    Sync-CsOnlineApplicationInstance -ApplicationId "11cd3e2e-fccb-42ad-ad00-878b93575e07" -ObjectID $objectID
 }
 elseif ($type -eq 'Roger365') {
-    Set-CsOnlineApplicationInstance -ApplicationId "c8db29b6-8184-44fa-a6a1-086b8ae0435e" -Identity $upn
     Write-host "Setting type to Roger365" -ForegroundColor White
+    Set-CsOnlineApplicationInstance -ApplicationId "c8db29b6-8184-44fa-a6a1-086b8ae0435e" -Identity $upn
+    Write-host "Syncing Application Instance" -ForegroundColor White
+    Sync-CsOnlineApplicationInstance -ApplicationId "c8db29b6-8184-44fa-a6a1-086b8ae0435e" -ObjectID $objectID
+}
+elseif ($type -eq 'Connecsy') {
+    Write-host "Setting type to Connecsy" -ForegroundColor White
+    Set-CsOnlineApplicationInstance -ApplicationId "0346b13d-1bb8-4e22-9890-af279449eba9" -Identity $upn
+    Write-host "Syncing Application Instance" -ForegroundColor White
+    Sync-CsOnlineApplicationInstance -ApplicationId "0346b13d-1bb8-4e22-9890-af279449eba9" -ObjectID $objectID
 }
 
-$objectID = (Get-CsOnlineApplicationInstance -Identity $upn).ObjectID
-#Sync-CsOnlineApplicationInstance -ObjectID $objectID
+
 
 Write-Host "Resource Account ObjectID: " -ForegroundColor White -NoNewLine
 Write-Host "$($objectID)" -ForegroundColor Green

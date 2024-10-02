@@ -174,11 +174,27 @@ if ($OutputType -eq "CSV") {
 }
 elseif ($OutputType -eq "HTML") {
     $Header = @"
-
     <style>
-    TABLE {border-width: 1px; border-style: solid; border-color: black; border-collapse: collapse; width:95%;}
-    TH {border-width: 1px; padding: 3px; border-style: solid; border-color: black; background-color: #6495ED;}
-    TD {border-width: 1px; padding: 3px; border-style: solid; border-color: black;}
+    table {
+        border-width: 1px;
+        border-style: solid;
+        border-color: black;
+        border-collapse: collapse;
+        width: 95%;
+    }
+    th {
+        border-width: 1px;
+        padding: 3px;
+        border-style: solid;
+        border-color: black;
+        background-color: #6495ED;
+    }
+    td {
+        border-width: 1px;
+        padding: 3px;
+        border-style: solid;
+        border-color: black;
+    }
     </style>
 "@
     
