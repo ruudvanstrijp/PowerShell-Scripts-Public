@@ -17,6 +17,8 @@ Param (
 )
  
 $debug = $true
+
+$newAccountCreated = $false
  
 $teamsModuleVersion = (Get-InstalledModule -Name MicrosoftTeams).Version
 if ($teamsModuleVersion -lt 4.0.0) {
@@ -51,9 +53,51 @@ ElseIf ($RASelect -eq 0) {
     $DisplayName = Read-Host -Prompt 'Enter Display Name for the new Resource Account'
     
     Write-Host
-    Write-Host 'Creating Resource Account of AA Type. Type can be changed after RA creation'
-    New-CsOnlineApplicationInstance -UserPrincipalName $upn -DisplayName $DisplayName -ApplicationId ce933385-9390-45d1-9512-c8d228074e07
-    #Pause script for 1 minute
+    Write-Host "Select the Resource Account Type:" -ForegroundColor Yellow
+    Write-Host "(1) Auto Attendant"
+    Write-Host "(2) Call Queue"
+    Write-Host "(3) Roger365"
+    Write-Host "(4) Connecsy"
+    
+    $typeChoice = Read-Host "Enter your choice (default is 1 for Auto Attendant)"
+    
+    # Default Application ID is for Auto Attendant
+    $applicationId = "ce933385-9390-45d1-9512-c8d228074e07" # Auto Attendant
+    
+    switch ($typeChoice) {
+        1 { 
+            Write-Host "Creating Resource Account of Auto Attendant Type" -ForegroundColor White
+            $applicationId = "ce933385-9390-45d1-9512-c8d228074e07" # Auto Attendant
+        }
+        2 { 
+            Write-Host "Creating Resource Account of Call Queue Type" -ForegroundColor White
+            $applicationId = "11cd3e2e-fccb-42ad-ad00-878b93575e07" # Call Queue
+        }
+        3 { 
+            Write-Host "Creating Resource Account of Roger365 Type" -ForegroundColor White
+            $applicationId = "c8db29b6-8184-44fa-a6a1-086b8ae0435e" # Roger365
+        }
+        4 { 
+            Write-Host "Creating Resource Account of Connecsy Type" -ForegroundColor White
+            $applicationId = "0346b13d-1bb8-4e22-9890-af279449eba9" # Connecsy
+        }
+        "" { 
+            Write-Host "No selection made, defaulting to Auto Attendant Type" -ForegroundColor Yellow
+            $applicationId = "ce933385-9390-45d1-9512-c8d228074e07" # Auto Attendant
+        }
+        default {
+            Write-Host "Invalid selection, defaulting to Auto Attendant Type" -ForegroundColor Yellow
+            $applicationId = "ce933385-9390-45d1-9512-c8d228074e07" # Auto Attendant
+        }
+    }
+    
+    # Create the resource account with the selected type
+    New-CsOnlineApplicationInstance -UserPrincipalName $upn -DisplayName $DisplayName -ApplicationId $applicationId
+    
+    # Markeer dat we een nieuw account hebben aangemaakt
+    $newAccountCreated = $true
+    
+    # Pause script for 1 minute
     Write-Host 'Pausing script for 1 minute to allow license to be assigned by dynamic group membership'
     Start-Sleep -s 60
 }
@@ -67,7 +111,7 @@ Else {
 }
 
 $resourceAccounts = Get-CsOnlineApplicationInstance
-if ($upn -eq $null -or $upn -eq "") {
+if ($null -eq $upn -or $upn -eq "") {
     Write-Host "================ Please select the Resource Account ================"
 
     $i = 0
@@ -106,7 +150,7 @@ if ($upn -notmatch "\@") {
 
 $objectID = (Get-CsOnlineApplicationInstance -Identity $upn).ObjectID
 
-if ($phoneNumber -eq $null -or $phoneNumber -eq "") {
+if ($null -eq $phoneNumber -or $phoneNumber -eq "") {
     $title = ''
     $question = 'Assign a Phone Number, Remove a Phone Number or Skip Phone Number assignment?'
     $choices = '&Assign', '&Remove', '&Skip'
@@ -196,7 +240,7 @@ else {
     }
 }
 
-if ($voiceRoutingPolicy -eq $null -or $voiceRoutingPolicy -eq "") {
+if ($null -eq $voiceRoutingPolicy -or $voiceRoutingPolicy -eq "") {
     Write-Host
     $title = ''
     $question = 'Do you want to assign a Voice Routing Policy to this Resource Account?'
@@ -205,7 +249,7 @@ if ($voiceRoutingPolicy -eq $null -or $voiceRoutingPolicy -eq "") {
     $decision = $Host.UI.PromptForChoice($title, $question, $choices, 1)
     if ($decision -eq 0) {
         $voiceRoutingPolicies = Get-CsOnlineVoiceRoutingPolicy  | ForEach-Object { ($_.Identity -replace "Tag:") }
-        if ($voiceRoutingPolicy -eq $null -or $voiceRoutingPolicy -eq "") {
+        if ($null -eq $voiceRoutingPolicy -or $voiceRoutingPolicy -eq "") {
             Write-Host "================ Please select the Voice Routing Policy ================"
 
             $i = 0
@@ -277,7 +321,7 @@ else {
 }
 
 $teamsDialPlans = Get-CsTenantDialPlan  | ForEach-Object { ($_.Identity -replace "Tag:") }
-if ($teamsDialPlan -eq $null -or $teamsDialPlan -eq "") {
+if ($null -eq $teamsDialPlan -or $teamsDialPlan -eq "") {
     Write-Host
     $title = ''
     $question = 'Do you want to assign a Dial Plan to this Resource Account?'
@@ -305,6 +349,12 @@ if ($teamsDialPlan -eq $null -or $teamsDialPlan -eq "") {
             Write-Host "Invalid selection" -ForegroundColor red
             exit
         }
+
+        #Assign Dial Plan
+        if ($debug -like $true) {
+            Write-Host "  DEBUG: Attempting to grant Tenant Dial Plan: " -ForegroundColor DarkGray -NoNewLine
+            Write-Host "$($teamsDialPlan)" -ForegroundColor Green
+        } 
 
         try {
             Grant-CsTenantDialPlan -Identity $upn -PolicyName $teamsDialPlan
@@ -345,17 +395,7 @@ else {
 }
 
 
-
-
-#Assign Dial Plan
-if ($debug -like $true) {
-    Write-Host "  DEBUG: Attempting to grant Tenant Dial Plan: " -ForegroundColor DarkGray -NoNewLine
-    Write-Host "$($teamsDialPlan)" -ForegroundColor Green
-}
-
-
-
-if (!$type) {
+if (!$type -and !$newAccountCreated) {
     Write-Host
     $title = ''
     $question = 'Do you want to change the Resource Account Type?'
@@ -417,6 +457,9 @@ if (!$type) {
         Write-Host '  Skipping type change' -ForegroundColor Yellow
     }
 }
+elseif (!$type -and $newAccountCreated) {
+    Write-Host "  Skipping type change because the account was just created with the selected type" -ForegroundColor Yellow
+}
 elseif ($type -eq 'AA') {
     Write-host "Setting type to Auto Attendant" -ForegroundColor White
     Set-CsOnlineApplicationInstance -ApplicationId "ce933385-9390-45d1-9512-c8d228074e07" -Identity $upn
@@ -447,3 +490,4 @@ elseif ($type -eq 'Connecsy') {
 
 Write-Host "Resource Account ObjectID: " -ForegroundColor White -NoNewLine
 Write-Host "$($objectID)" -ForegroundColor Green
+Write-Host ""
