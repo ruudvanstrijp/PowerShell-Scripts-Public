@@ -29,6 +29,8 @@ $tenant = Get-CsTenant
 
 Write-Host "  Connected to tenant: " -ForegroundColor White -NoNewLine
 Write-Host $tenant.DisplayName -ForegroundColor Green
+Write-Host "  Tenant ID: " -ForegroundColor White -NoNewLine
+Write-Host $tenant.TenantId -ForegroundColor Green
 Write-Host "  Tenant city: " -ForegroundColor White -NoNewLine
 Write-Host $tenant.City -ForegroundColor Green
 Write-Host "  Service instance: " -ForegroundColor White -NoNewLine
