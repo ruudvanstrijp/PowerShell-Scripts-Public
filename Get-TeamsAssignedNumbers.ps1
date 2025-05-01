@@ -58,19 +58,27 @@ try {
     if ($debug -like $true) {
         Write-Host "  DEBUG: Trying to connect to existing session..." -ForegroundColor DarkGray
     }
-    Get-CsTenant | Out-Null
+    $tenantInfo = Get-CsTenant
 }
 Catch {
     Write-Host "  DEBUG: Could not connect to existing session, starting new session" -ForegroundColor DarkGray
     Connect-MicrosoftTeams
+    $tenantInfo = Get-CsTenant
 }
 
+#Get Tenant onmicrosoft domain
+$onMicrosoftDomainName = ($tenantInfo | Select-Object -ExpandProperty VerifiedDomains | Where-Object { $_.Name -like '*.onmicrosoft.com' -and $_.Name -notlike '*.mail.onmicrosoft.com' } | Select-Object -First 1).Name
+$tenantName = $onMicrosoftDomainName -replace ".onmicrosoft.com", ""
+
 Write-Host "  Connected to tenant: " -ForegroundColor White -NoNewLine
-Write-Host (Get-CsTenant).DisplayName -ForegroundColor Green
+Write-Host ($tenantInfo).DisplayName -ForegroundColor Green
+Write-Host "  With tenant domain: " -ForegroundColor White -NoNewLine
+Write-Host $tenantName -ForegroundColor Green -NoNewLine
+Write-Host ".onmicrosoft.com" -ForegroundColor White
 
 #Settings ##############################
 #. "_Settings.ps1" | Out-Null
-$FileName = "TeamsAssignedNumbers_" + (Get-Date -Format s).replace(":", "-") 
+$FileName = "TeamsAssignedNumbers_" + $tenantName + "_" + (Get-Date -Format s).replace(":", "-") 
 $FolderPath = $PSScriptRoot + "\Output\"
 $FilePath = $FolderPath + $FileName
 
@@ -86,6 +94,7 @@ $OutputType = "HTML" #OPTIONS: CSV - Outputs CSV to specified FilePath, CONSOLE 
 
 $Regex1 = '^(?:tel:)?(?:\+)?(\d+)(?:;ext=(\d+))?(?:;([\w-]+))?$'
 $Array1 = @()
+$userCount = $null
 #Get Users with LineURI
 #$UsersLineURI = Get-CsOnlineUser -Filter {LineURI -ne $Null}
 
@@ -128,17 +137,21 @@ if ($UsersLineURI -ne $null) {
         if ($Item.AccountType -eq 'ResourceAccount') {
             #$applicationInstance = Get-CsOnlineApplicationInstance $Item.UserPrincipalName
             $applicationInstance = ($getApplications | Where-Object { $_.UserPrincipalName -eq $Item.UserPrincipalName })
-            $myObject1 | Add-Member -type NoteProperty -name "Type" -Value $(if ($applicationInstance.ApplicationId -eq "ce933385-9390-45d1-9512-c8d228074e07") { "Auto Attendant Resource Account" } elseif ($applicationInstance.ApplicationId -eq "11cd3e2e-fccb-42ad-ad00-878b93575e07") { "Call Queue Resource Account" } elseif ($applicationInstance.ApplicationId -eq "01b9161a-881b-4ab0-8ee2-15e9141e95c6") { "PeterConnects Resource Account" } elseif ($applicationInstance.ApplicationId -eq "c8db29b6-8184-44fa-a6a1-086b8ae0435e") { "Roger365 Resource Account" } else { "Unknown Resource Account" })
+            $myObject1 | Add-Member -type NoteProperty -name "Type" -Value $(if ($applicationInstance.ApplicationId -eq "ce933385-9390-45d1-9512-c8d228074e07") { "Auto Attendant Resource Account" } elseif ($applicationInstance.ApplicationId -eq "11cd3e2e-fccb-42ad-ad00-878b93575e07") { "Call Queue Resource Account" } elseif ($applicationInstance.ApplicationId -eq "01b9161a-881b-4ab0-8ee2-15e9141e95c6") { "PeterConnects Resource Account" } elseif ($applicationInstance.ApplicationId -eq "c8db29b6-8184-44fa-a6a1-086b8ae0435e") { "Roger365 Resource Account" } elseif ($applicationInstance.ApplicationId -eq "0346b13d-1bb8-4e22-9890-af279449eba9") { "Connecsy Resource Account" } else { "Unknown Resource Account" })
             $myObject1 | Add-Member -type NoteProperty -name "ID" -Value $applicationInstance.ObjectId
         }
         else {
             $myObject1 | Add-Member -type NoteProperty -name "Type" -Value "User"
             $myObject1 | Add-Member -type NoteProperty -name "ID" -Value ''
+			$userCount++
         }
         
         $Array1 += $myObject1          
     }
 }
+
+Write-Host "  Amount of Teams Voice users : " -ForegroundColor White -NoNewLine
+Write-Host $userCount -ForegroundColor Green
 
 $unassignedNumbers = Get-CsTeamsUnassignedNumberTreatment
 if ($unassignedNumbers -ne $null -and !$onlyMissingPolicies) {

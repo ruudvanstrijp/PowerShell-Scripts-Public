@@ -16,34 +16,20 @@ ruud.vanstrijp@axians.com
 Param (
     [switch]$detailed
 )
-<#
-$teamsModuleVersion = (Get-InstalledModule -Name MicrosoftTeams).Version
-if ($teamsModuleVersion -lt 4.0.0) {
-    Write-Host "  WARNING: Module Version older than 4.0.0 will be deprecated soon. This script might not run well" -ForegroundColor red
-}
-if ($teamsModuleVersion -lt 5.0.0) {
-    Write-Host "  WARNING: Module Version older than 5.0.0 will run a lot slower" -ForegroundColor red
-}
 
-try {
-    if ($debug -like $true) {
-        Write-Host "  DEBUG: Trying to connect to existing session..." -ForegroundColor DarkGray
-    }
-    Get-CsTenant | Out-Null
-}
-Catch {
-    Write-Host "  DEBUG: Could not connect to existing session, starting new session" -ForegroundColor DarkGray
-    Connect-MicrosoftTeams
-}
+$tenantInfo = Get-CsTenant
+
+#Get Tenant onmicrosoft domain
+$onMicrosoftDomainName = ($tenantInfo | Select-Object -ExpandProperty VerifiedDomains | Where-Object { $_.Name -like '*.onmicrosoft.com' -and $_.Name -notlike '*.mail.onmicrosoft.com' } | Select-Object -First 1).Name
+$tenantName = $onMicrosoftDomainName -replace ".onmicrosoft.com", ""
 
 Write-Host "  Connected to tenant: " -ForegroundColor White -NoNewLine
-Write-Host (Get-CsTenant).DisplayName -ForegroundColor Green
+Write-Host ($tenantInfo).DisplayName -ForegroundColor Green
+Write-Host "  With tenant domain: " -ForegroundColor White -NoNewLine
+Write-Host $tenantName -ForegroundColor Green -NoNewLine
+Write-Host ".onmicrosoft.com" -ForegroundColor White
 
-#>
-
-#Settings ##############################
-#. "_Settings.ps1" | Out-Null
-$FileName = "TeamsAttendants_" + (Get-Date -Format s).replace(":", "-") 
+$FileName = "TeamsAttendants_" + $tenantName + "_" + (Get-Date -Format s).replace(":", "-") 
 
 $FolderPath = $PSScriptRoot + "\Output\"
 $FilePath = $FolderPath + $FileName
