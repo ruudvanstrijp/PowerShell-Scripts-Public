@@ -31,6 +31,9 @@
     v1.6 - Get Dial Plan, fix first name, merge Resource Account and User, make table wider
     v1.7 - Added Unassigned Number Treatment
     v1.8 - Changed export to Output folder
+    v1.9 - Added option to only show Resource Accounts and only show missing policies
+    v2.0 - Added option to use extensions, added more resource account types, added ID column for resource accounts
+    v2.1 - Fixed export to CSV
 
 .NOTES
 Microsoft Teams module 4.0.0 or higher needs to be installed into PowerShell. 5.0 is heavily recommended because of it's speed
@@ -40,7 +43,10 @@ Install-Module -Name MicrosoftTeams -Force -Scope AllUsers
 
 Param (
     [switch]$onlyRA,
-    [switch]$onlyMissingPolicies
+    [switch]$onlyMissingPolicies,
+    [switch]$useExtensions,
+    [ValidateSet("HTML", "CSV")]
+    [string]$OutputType = "HTML"
 )
 
 
@@ -87,8 +93,6 @@ if (!(Test-Path $FolderPath)) {
     New-Item -ItemType Directory -Force -Path $FolderPath
 }
 
-$OutputType = "HTML" #OPTIONS: CSV - Outputs CSV to specified FilePath, CONSOLE - Outputs to console
-
 
 ##############################
 
@@ -102,29 +106,53 @@ if($onlyMissingPolicies){
     $UsersLineURI = Get-CsOnlineUser -Filter { EnterpriseVoiceEnabled -eq $true -and (TeamsCallingPolicy -eq $null -or OnlineVoiceRoutingPolicy -eq $null -or TenantDialPlan -eq $null)}
 }else{
     $UsersLineURI = Get-CsOnlineUser -Filter { EnterpriseVoiceEnabled -eq $true }
+    #Optie: Get-CsOnlineUser -Filter {FeatureTypes -contains "PhoneSystem"}
 }
 
 #$usersLineURI | Select-Object UserPrincipalName, TeamsCallingPolicy, OnlineVoiceRoutingPolicy, TenantDialPlan
 $getApplications = Get-CsOnlineApplicationInstance
 Write-Host "  DEBUG: Loaded user list. Processing data." -ForegroundColor DarkGray
 
-if ($UsersLineURI -ne $null) {
+if ($UsersLineURI) {
     foreach ($item in $UsersLineURI) {                  
+        <# WIP
+        Write-Host "  Querying policy information for" $item.DisplayName -ForegroundColor Green
+        $UserPolicies  = Get-CsUserPolicyAssignment -Identity $item.UserPrincipalName -ErrorAction SilentlyContinue
+        
+        https://practical365.com/teams-policy-assignment-report/
+        https://techcommunity.microsoft.com/discussions/microsoftteams/powershell-script-to-find-out-teams-policies-by-users/1210021
+        
+        $item.VoicePolicy = ($UserPolicies | Where-Object {$_.PolicyType -eq "VoicePolicy"}).PolicyName
+        $item.VoicePolicy = (($UserPolicies | Where-Object {$_.PolicyType -eq "VoicePolicy"}).PolicySource).AssignmentType
+        $item.MeetingPolicy = ($UserPolicies | Where-Object {$_.PolicyType -eq "MeetingPolicy"}).PolicyName
+        $item.MeetingPolicySource = (($UserPolicies | Where-Object {$_.PolicyType -eq "MeetingPolicy"}).PolicySource).AssignmentType
+        $item.TeamsMeetingPolicy = ($UserPolicies | Where-Object {$_.PolicyType -eq "TeamsMeetingPolicy"}).PolicyName
+        $item.TeamsMeetingPolicySource = (($UserPolicies | Where-Object {$_.PolicyType -eq "TeamsMeetingPolicy"}).PolicySource).AssignmentType
+        $item.TeamsMessagingPolicy = ($UserPolicies | Where-Object {$_.PolicyType -eq "TeamsMessagingPolicy"}).PolicyName
+        $item.TeamsMessagingPolicySource = (($UserPolicies | Where-Object {$_.PolicyType -eq "TeamsMessagingPolicy"}).PolicySource).AssignmentType
+        $item.TeamsAppSetupPolicy = ($UserPolicies | Where-Object {$_.PolicyType -eq "TeamsAppSetupPolicy"}).PolicyName
+        $item.TeamsAppSetupPolicySource = (($UserPolicies | Where-Object {$_.PolicyType -eq "TeamsAppSetupPolicy"}).PolicySource).AssignmentType
+        $item.TeamsCallingPolicy = ($UserPolicies | Where-Object {$_.PolicyType -eq "TeamsCallingPolicy"}).PolicyName
+        $item.TeamsCallingPolicySource = (($UserPolicies | Where-Object {$_.PolicyType -eq "TeamsCallingPolicy"}).PolicySource).AssignmentType
+        #>
+
         if ($onlyRA -and $Item.AccountType -ne 'ResourceAccount') {
             Continue
         }
-        if ($onlyMissingPolicies -and $Item.AccountType -eq 'ResourceAccount' -and ($Item.OnlineVoiceRoutingPolicy -ne $null -or $Item.TenantDialPlan -ne $null) ) {
+        if ($onlyMissingPolicies -and $Item.AccountType -eq 'ResourceAccount' -and ($Item.OnlineVoiceRoutingPolicy -or $Item.TenantDialPlan) ) {
             Continue
         }
         $myObject1 = New-Object System.Object
         
-        $Matches = @()
-        $Item.LineURI -match $Regex1 | out-null
+        $lineUriMatch = [regex]::Match($Item.LineURI, $Regex1)
         $phoneNumber = $Item.LineURI -replace "[^0-9,+]" , ''
         
         $myObject1 | Add-Member -type NoteProperty -name "LineURI" -Value $phoneNumber
-        $myObject1 | Add-Member -type NoteProperty -name "DDI" -Value $Matches[1]
-        $myObject1 | Add-Member -type NoteProperty -name "Ext" -Value $Matches[2]
+        if($useExtensions){
+            $myObject1 | Add-Member -type NoteProperty -name "DDI" -Value $lineUriMatch.Groups[1].Value
+            $myObject1 | Add-Member -type NoteProperty -name "Ext" -Value $lineUriMatch.Groups[2].Value
+        }
+
         $myObject1 | Add-Member -type NoteProperty -name "UPN" -Value $Item.UserPrincipalName
         $myObject1 | Add-Member -type NoteProperty -name "DisplayName" -Value $Item.DisplayName
         $myObject1 | Add-Member -type NoteProperty -name "FirstName" -Value $Item.GivenName
@@ -154,7 +182,7 @@ Write-Host "  Amount of Teams Voice users : " -ForegroundColor White -NoNewLine
 Write-Host $userCount -ForegroundColor Green
 
 $unassignedNumbers = Get-CsTeamsUnassignedNumberTreatment
-if ($unassignedNumbers -ne $null -and !$onlyMissingPolicies) {
+if ($unassignedNumbers -and !$onlyMissingPolicies) {
     foreach ($unassignedNumber in $unassignedNumbers) {                  
         $myObject1 = New-Object System.Object
         
@@ -162,8 +190,10 @@ if ($unassignedNumbers -ne $null -and !$onlyMissingPolicies) {
         $user = (Get-CsOnlineUser $unassignedNumber.Target)
         
         $myObject1 | Add-Member -type NoteProperty -name "LineURI" -Value $phoneNumber
-        $myObject1 | Add-Member -type NoteProperty -name "DDI" -Value $unassignedNumber.Identity
-        $myObject1 | Add-Member -type NoteProperty -name "Ext" -Value ''
+        if($useExtensions){
+            $myObject1 | Add-Member -type NoteProperty -name "DDI" -Value $unassignedNumber.Identity
+            $myObject1 | Add-Member -type NoteProperty -name "Ext" -Value ''
+        }
         $myObject1 | Add-Member -type NoteProperty -name "UPN" -Value $user.UserPrincipalName
         $myObject1 | Add-Member -type NoteProperty -name "DisplayName" -Value $unassignedNumber.Description
         $myObject1 | Add-Member -type NoteProperty -name "FirstName" -Value ''
@@ -182,43 +212,48 @@ if ($unassignedNumbers -ne $null -and !$onlyMissingPolicies) {
 
 
 if ($OutputType -eq "CSV") {
-    $Array1 | export-csv $FilePath".csv" -NoTypeInformation
+    $Array1 | Sort-Object -Property LineURI | Export-Csv -Path ($FilePath + ".csv") -NoTypeInformation
     Write-Host "ALL DONE!! Your file has been saved to $FilePath.csv"
 }
 elseif ($OutputType -eq "HTML") {
-    $Header = @"
-    <style>
+    $Header = '<style>
+    body {
+        background-color: white;
+        font-family:      "Calibri";
+    }
+
     table {
-        border-width: 1px;
-        border-style: solid;
-        border-color: black;
-        border-collapse: collapse;
-        width: 95%;
+        border-width:     1px;
+        border-style:     solid;
+        border-color:     black;
+        border-collapse:  collapse;
+        width:            100%;
     }
+
     th {
-        border-width: 1px;
-        padding: 3px;
-        border-style: solid;
-        border-color: black;
-        background-color: #6495ED;
+        border-width:     1px;
+        padding:          5px;
+        border-style:     solid;
+        border-color:     black;
+        background-color: #98C6F3;
     }
+
     td {
-        border-width: 1px;
-        padding: 3px;
-        border-style: solid;
-        border-color: black;
+        border-width:     1px;
+        padding:          5px;
+        border-style:     solid;
+        border-color:     black;
+        background-color: White;
     }
-    </style>
-"@
+
+    tr {
+        text-align:       left;
+    }
+    </style>'
     
     $Array1 | Sort-Object -Property LineURI |  ConvertTo-Html -Head $Header | Out-File -FilePath $FilePath".html"
     Write-Host "ALL DONE!! Your file has been saved to $FilePath.html"
 }
-elseif ($OutputType -eq "CONSOLE") {
-    $Array1 | FT -AutoSize -Property LineURI, DDI, Ext, DisplayName, UPN, Type
-    Write-Host "ALL DONE!!"
-}
 else {
-    $Array1 | FT -AutoSize -Property LineURI, DDI, Ext, DisplayName, UPN, Type
-    Write-Host "WARNING: Valid output type not set, defaulted to console."
+    throw "Unsupported OutputType '$OutputType'. Use HTML or CSV."
 }
